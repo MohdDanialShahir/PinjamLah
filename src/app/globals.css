@@ -1,26 +1,249 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Sharing Shed Design Tokens */
+  --color-canvas: #F9F8F3;
+  --color-card: #FFFFFF;
+  --color-card-border: #E6E8E5;
+  --color-forest: #0D3B2E;
+  --color-forest-light: #14533E;
+  --color-forest-hover: #0D3B2E;
+  --color-mint: #E8F3EE;
+  --color-mint-text: #136C43;
+  --color-soft-blue: #EDF3FA;
+  --color-status-available-bg: #E3F5EC;
+  --color-status-available-text: #136C43;
+
+  --font-sans: 'Inter', 'system-ui', sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    background-color: #F9F8F3;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #1a1a1a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Mobile PWA viewport */
+  html, body {
+    overscroll-behavior: none;
+    overflow-x: hidden;
+  }
+
+  input, textarea, select {
+    font-size: 16px; /* prevent iOS zoom */
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* Mobile frame wrapper */
+  .mobile-frame {
+    max-width: 430px;
+    margin-left: auto;
+    margin-right: auto;
+    min-height: 100dvh;
+    background: #F9F8F3;
+    position: relative;
+  }
+
+  @media (min-width: 640px) {
+    .mobile-frame {
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      border-left: 1px solid #E6E8E5;
+      border-right: 1px solid #E6E8E5;
+    }
+  }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 430px;
+    background: #FFFFFF;
+    border-top: 1px solid #E6E8E5;
+    padding: 8px 0;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    z-index: 50;
+  }
+
+  .bottom-nav a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    color: #9CA3AF;
+    transition: color 150ms;
+    text-decoration: none;
+  }
+
+  .bottom-nav a.active {
+    color: #14533E;
+  }
+
+  .bottom-nav a:hover {
+    color: #14533E;
+  }
+
+  /* Cards */
+  .card {
+    background: #FFFFFF;
+    border: 1px solid #E6E8E5;
+    border-radius: 16px;
+    padding: 16px;
+  }
+
+  .card-hero {
+    background: #0D3B2E;
+    border-radius: 20px;
+    padding: 24px;
+    color: #FFFFFF;
+  }
+
+  /* Status pills */
+  .pill-available {
+    background: #E3F5EC;
+    color: #136C43;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    display: inline-block;
+  }
+
+  .pill-reserved {
+    background: #FEF3C7;
+    color: #92400E;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    display: inline-block;
+  }
+
+  .pill-in-use {
+    background: #FEE2E2;
+    color: #991B1B;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    display: inline-block;
+  }
+
+  /* Primary CTA */
+  .btn-primary {
+    background: #14533E;
+    color: #FFFFFF;
+    font-weight: 600;
+    padding: 14px 24px;
+    border-radius: 14px;
+    width: 100%;
+    text-align: center;
+    transition: background 150ms, transform 100ms;
+    cursor: pointer;
+    border: none;
+    font-size: 16px;
+  }
+
+  .btn-primary:hover {
+    background: #0D3B2E;
+  }
+
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Step indicator */
+  .step-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .step-dot-active {
+    background: #14533E;
+    color: #FFFFFF;
+  }
+
+  .step-dot-done {
+    background: #E3F5EC;
+    color: #136C43;
+  }
+
+  .step-dot-pending {
+    background: #F3F4F6;
+    color: #9CA3AF;
+  }
+
+  /* Page content area (above bottom nav) */
+  .page-content {
+    padding-bottom: 90px;
+    min-height: 100dvh;
+  }
+
+  /* Locker bay visual */
+  .locker-bay {
+    width: 72px;
+    height: 72px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    transition: all 300ms;
+  }
+
+  .locker-locked {
+    background: #F3F4F6;
+    color: #6B7280;
+    border: 2px solid #E5E7EB;
+  }
+
+  .locker-unlocked {
+    background: #E8F3EE;
+    color: #14533E;
+    border: 2px solid #14533E;
+    animation: lockerPulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes lockerPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(20, 83, 62, 0.3); }
+    50% { box-shadow: 0 0 0 8px rgba(20, 83, 62, 0); }
+  }
+
+  /* Condition card */
+  .condition-card {
+    background: #E8F3EE;
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .price-card {
+    background: #EDF3FA;
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+  }
 }

@@ -1,0 +1,696 @@
+'use client';
+
+import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import type { Loan, Item, Locker } from '@/types/database';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  ArrowLeft,
+  MoreHorizontal,
+  CheckCircle2,
+  Circle,
+  Camera,
+  Upload,
+  Loader2,
+  Lock,
+  Unlock,
+} from 'lucide-react';
+
+const RESIDENT_ID = 'aina-rahman-001';
+
+function ScanContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const mode = searchParams.get('mode') || 'borrow';
+  const loanIdParam = searchParams.get('loan_id');
+
+  const [loan, setLoan] = useState<Loan | null>(null);
+  const [item, setItem] = useState<Item | null>(null);
+  const [lockers, setLockers] = useState<Locker[]>([]);
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+
+  // Return specific state
+  const [workingWell, setWorkingWell] = useState(true);
+  const [allParts, setAllParts] = useState(true);
+  const [returnPhoto, setReturnPhoto] = useState<File | null>(null);
+  const [returnPhotoPreview, setReturnPhotoPreview] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<Record<string, unknown> | null>(null);
+  const [returnComplete, setReturnComplete] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load loan data
+  useEffect(() => {
+    loadData();
+  }, [loanIdParam]);
+
+  async function loadData() {
+    if (!loanIdParam) {
+      // Find most recent active loan
+      const { data: loans } = await supabase
+        .from('loans')
+        .select('*')
+        .eq('resident_id', RESIDENT_ID)
+        .in('status', mode === 'borrow' ? ['RESERVED'] : ['ACTIVE'])
+        .order('start_date', { ascending: false })
+        .limit(1);
+
+      if (loans && loans.length > 0) {
+        const l = loans[0] as Loan;
+        setLoan(l);
+        await loadItem(l.item_id);
+        // Set step based on status
+        if (l.status === 'RESERVED') setStep(2);
+        if (l.status === 'ACTIVE') setStep(1);
+      }
+    } else {
+      const { data: loanData } = await supabase
+        .from('loans')
+        .select('*')
+        .eq('id', loanIdParam)
+        .single();
+
+      if (loanData) {
+        const l = loanData as Loan;
+        setLoan(l);
+        await loadItem(l.item_id);
+        if (l.status === 'RESERVED') setStep(2);
+        if (l.status === 'ACTIVE' && mode === 'borrow') setStep(5);
+        if (l.status === 'ACTIVE' && mode === 'return') setStep(1);
+        if (l.status === 'RETURNED') {
+          setStep(5);
+          setReturnComplete(true);
+        }
+      }
+    }
+
+    // Load lockers
+    const { data: lockerData } = await supabase.from('lockers').select('*').order('bay_code');
+    if (lockerData) setLockers(lockerData as Locker[]);
+    setLoading(false);
+  }
+
+  async function loadItem(itemId: string) {
+    const { data } = await supabase.from('items').select('*').eq('id', itemId).single();
+    if (data) setItem(data as Item);
+  }
+
+  // Subscribe to real-time locker updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('lockers-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'lockers' },
+        (payload) => {
+          setLockers((prev) =>
+            prev.map((l) =>
+              l.bay_code === (payload.new as Locker).bay_code
+                ? (payload.new as Locker)
+                : l
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Simulate QR scan -> unlock locker
+  async function handleScanPickup() {
+    if (!loan || !item) return;
+    setScanning(true);
+    setStep(3);
+
+    // Simulate scanning delay
+    await new Promise((r) => setTimeout(r, 1500));
+    setUnlocking(true);
+
+    // Unlock locker in Supabase
+    await supabase
+      .from('lockers')
+      .update({ is_unlocked: true, last_updated: new Date().toISOString() })
+      .eq('bay_code', loan.locker_bay);
+
+    setStep(4);
+    setScanning(false);
+
+    // After unlocking, mark loan as ACTIVE
+    await new Promise((r) => setTimeout(r, 2000));
+
+    await supabase
+      .from('loans')
+      .update({
+        status: 'ACTIVE',
+        collected_at: new Date().toISOString(),
+      })
+      .eq('id', loan.id);
+
+    await supabase
+      .from('items')
+      .update({ status: 'In Use' })
+      .eq('id', item.id);
+
+    setLoan((prev) => prev ? { ...prev, status: 'ACTIVE', collected_at: new Date().toISOString() } : null);
+    setStep(5);
+  }
+
+  // Return flow - scan to unlock
+  async function handleScanReturn() {
+    if (!loan) return;
+    setScanning(true);
+    setStep(2);
+
+    await new Promise((r) => setTimeout(r, 1500));
+
+    // Unlock locker for return
+    await supabase
+      .from('lockers')
+      .update({ is_unlocked: true, last_updated: new Date().toISOString() })
+      .eq('bay_code', loan.locker_bay);
+
+    setScanning(false);
+    setStep(3);
+  }
+
+  // Handle photo capture/upload
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      setReturnPhoto(file);
+      const reader = new FileReader();
+      reader.onload = () => setReturnPhotoPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  }
+
+  // Send photo to Gemini Vision API for verification
+  async function handleVerifyReturn() {
+    if (!loan || !item || !returnPhoto) return;
+    setVerifying(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('photo', returnPhoto);
+      formData.append('loan_id', loan.id);
+      formData.append('item_id', item.id);
+      formData.append('item_name', item.name);
+      formData.append('working_well', String(workingWell));
+      formData.append('all_parts_included', String(allParts));
+
+      const response = await fetch('/api/verify-return', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      setVerificationResult(result);
+
+      if (result.success) {
+        setStep(5);
+        setReturnComplete(true);
+        // Refresh loan data
+        const { data: updatedLoan } = await supabase
+          .from('loans')
+          .select('*')
+          .eq('id', loan.id)
+          .single();
+        if (updatedLoan) setLoan(updatedLoan as Loan);
+      }
+    } catch (err) {
+      console.error('Verification error:', err);
+      alert('Verification failed. Please try again.');
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="page-content flex items-center justify-center">
+        <Loader2 className="animate-spin text-forest" size={32} />
+      </div>
+    );
+  }
+
+  // ============ BORROW MODE ============
+  if (mode === 'borrow') {
+    const borrowSteps = [
+      { label: 'Reserve your item', done: step > 1 },
+      { label: 'Your pickup QR is ready', done: step > 2, active: step === 2 },
+      { label: 'Scan at the sharing shed', done: step > 3, active: step === 3 },
+      { label: 'Your smart locker opens', done: step > 4, active: step === 4 },
+      { label: 'Borrow confirmed', done: step >= 5, active: step === 5 },
+    ];
+
+    return (
+      <div className="page-content">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+          <button onClick={() => router.back()}>
+            <ArrowLeft size={22} />
+          </button>
+          <button>
+            <MoreHorizontal size={22} className="text-gray-400" />
+          </button>
+        </div>
+
+        <div className="px-5 pt-2">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Your project starts here.</h1>
+          <p className="text-sm text-gray-400 mb-6">
+            Pickup journey · {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          </p>
+
+          {/* Step tracker */}
+          <div className="space-y-4 mb-8">
+            {borrowSteps.map((s, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <div className="flex flex-col items-center">
+                  {s.done ? (
+                    <CheckCircle2 size={24} className="text-forest" />
+                  ) : s.active ? (
+                    <div className="step-dot step-dot-active">{i + 1}</div>
+                  ) : (
+                    <Circle size={24} className="text-gray-200" />
+                  )}
+                  {i < borrowSteps.length - 1 && (
+                    <div className={`w-0.5 h-6 mt-1 ${s.done ? 'bg-forest/30' : 'bg-gray-100'}`} />
+                  )}
+                </div>
+                <div className="pt-0.5">
+                  <p className={`text-sm font-medium ${s.done || s.active ? 'text-gray-900' : 'text-gray-400'}`}>
+                    {s.label}
+                  </p>
+
+                  {/* Step 1 - Item details */}
+                  {i === 0 && step >= 1 && loan && item && (
+                    <div className="mt-2 card bg-mint/30 border-forest/10">
+                      <div className="flex gap-3">
+                        <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
+                          {item.image_url ? (
+                            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-2xl">🔧</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">{item.name} · {item.id}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(loan.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} → {new Date(loan.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          </p>
+                          <p className="text-xs text-gray-400">{RESIDENT_ID} · {item.shed_name}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 2 - QR Code */}
+                  {i === 1 && step === 2 && loan && (
+                    <div className="mt-3 flex flex-col items-center">
+                      <p className="text-xs text-gray-500 mb-3">
+                        Generated for {item?.name} · {RESIDENT_ID}
+                      </p>
+                      <div className="bg-white p-4 rounded-2xl border border-card-border shadow-sm">
+                        <QRCodeSVG
+                          value={JSON.stringify({
+                            loan_id: loan.id,
+                            item_id: loan.item_id,
+                            locker_bay: loan.locker_bay,
+                            action: 'PICKUP',
+                            qr_token: loan.qr_token,
+                          })}
+                          size={180}
+                          level="H"
+                          includeMargin
+                        />
+                      </div>
+                      <button className="mt-3 bg-mint text-forest px-4 py-2 rounded-xl text-xs font-semibold">
+                        Pickup pass
+                      </button>
+
+                      {/* Locker info */}
+                      <div className="mt-4 text-center">
+                        <p className="font-semibold text-sm mb-1">Locker {loan.locker_bay}</p>
+                        <p className="text-xs text-gray-400">
+                          {item?.shed_name} shed · {item?.distance_m}m from home
+                        </p>
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          Reusable QR. Not valid for access.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 3 - Scan instruction */}
+                  {i === 2 && step >= 2 && step <= 3 && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Present your pickup QR to the scanner beside the locker doors.
+                    </p>
+                  )}
+
+                  {/* Step 4 - Locker visual */}
+                  {i === 3 && step >= 3 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-gray-400 mb-2">
+                        Take the drill kit and check all accessories.
+                      </p>
+                      <div className="flex gap-2 mt-2">
+                        {lockers.slice(0, 3).map((l) => (
+                          <div
+                            key={l.bay_code}
+                            className={`locker-bay ${
+                              l.is_unlocked ? 'locker-unlocked' : 'locker-locked'
+                            }`}
+                          >
+                            {l.is_unlocked ? (
+                              <Unlock size={16} />
+                            ) : (
+                              <Lock size={16} />
+                            )}
+                            <span className="ml-1 text-xs">{l.bay_code}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 5 - Confirmed */}
+                  {i === 4 && step === 5 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-gray-500">
+                        Collected {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} at{' '}
+                        {new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}. You&apos;re all set!
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Return by {loan ? new Date(loan.end_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '...'}, 18:00 to {loan?.locker_bay}.
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        We&apos;ll remind you 2 hours before it&apos;s due.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA Buttons */}
+          {step === 2 && (
+            <button
+              onClick={handleScanPickup}
+              className="btn-primary flex items-center justify-center gap-2 mb-4"
+              disabled={scanning}
+            >
+              {scanning ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : (
+                <>Scan at the sharing shed →</>
+              )}
+            </button>
+          )}
+
+          {step === 5 && (
+            <button
+              onClick={() => router.push(`/scan?mode=return&loan_id=${loan?.id}`)}
+              className="btn-primary flex items-center justify-center gap-2 mb-4"
+            >
+              View my borrowing →
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ============ RETURN MODE ============
+  const returnSteps = [
+    { label: 'Return your item', done: step > 1, active: step === 1 },
+    { label: 'Scan your return QR', done: step > 2, active: step === 2 },
+    { label: 'How did it hold up?', done: step > 3, active: step === 3 },
+    { label: 'Take or upload a photo', done: step > 4, active: step === 4 },
+    { label: 'Return confirmed. Thank you!', done: returnComplete, active: step === 5 && returnComplete },
+  ];
+
+  return (
+    <div className="page-content">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <button onClick={() => router.back()}>
+          <ArrowLeft size={22} />
+        </button>
+        <button>
+          <MoreHorizontal size={22} className="text-gray-400" />
+        </button>
+      </div>
+
+      <div className="px-5 pt-2">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Back into the circle.</h1>
+        <p className="text-sm text-gray-400 mb-6">
+          Return journey · {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+        </p>
+
+        {/* Step tracker */}
+        <div className="space-y-4 mb-8">
+          {returnSteps.map((s, i) => (
+            <div key={i} className="flex items-start gap-3">
+              <div className="flex flex-col items-center">
+                {s.done ? (
+                  <CheckCircle2 size={24} className="text-forest" />
+                ) : s.active ? (
+                  <div className="step-dot step-dot-active">{i + 1}</div>
+                ) : (
+                  <Circle size={24} className="text-gray-200" />
+                )}
+                {i < returnSteps.length - 1 && (
+                  <div className={`w-0.5 h-6 mt-1 ${s.done ? 'bg-forest/30' : 'bg-gray-100'}`} />
+                )}
+              </div>
+              <div className="pt-0.5 flex-1">
+                <p className={`text-sm font-medium ${s.done || s.active ? 'text-gray-900' : 'text-gray-400'}`}>
+                  {s.label}
+                </p>
+
+                {/* Step 1 - Select item to return */}
+                {i === 0 && step === 1 && loan && item && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-400 mb-2">Choose your current loan to begin.</p>
+                    <div className="card bg-mint/30 border-forest/10">
+                      <div className="flex gap-3">
+                        <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center">
+                          <span className="text-2xl">🔧</span>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">{item.name} · {item.id}</p>
+                          <p className="text-xs text-gray-500">
+                            {RESIDENT_ID} · Due{' '}
+                            {new Date(loan.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          </p>
+                          <span className="text-[10px] text-forest font-medium">Returning on time</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 2 - QR Code for return */}
+                {i === 1 && step >= 1 && step <= 2 && loan && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-400">
+                      Scan at {item?.shed_name}. {loan.locker_bay} opens for your kit.
+                    </p>
+                    {step === 2 && (
+                      <div className="mt-3 flex flex-col items-center">
+                        <div className="bg-white p-3 rounded-2xl border border-card-border shadow-sm">
+                          <QRCodeSVG
+                            value={JSON.stringify({
+                              loan_id: loan.id,
+                              item_id: loan.item_id,
+                              locker_bay: loan.locker_bay,
+                              action: 'RETURN',
+                              qr_token: loan.qr_token,
+                            })}
+                            size={140}
+                            level="H"
+                            includeMargin
+                          />
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-2">Reusable QR. No refund for access.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 3 - Condition toggles */}
+                {i === 2 && step === 3 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-400 mb-2">
+                      Quick condition check · Score remains {item?.condition_score}/10
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setWorkingWell(!workingWell)}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                          workingWell
+                            ? 'bg-mint text-forest border border-forest/20'
+                            : 'bg-gray-50 text-gray-400 border border-gray-200'
+                        }`}
+                      >
+                        ✓ Working well
+                      </button>
+                      <button
+                        onClick={() => setAllParts(!allParts)}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                          allParts
+                            ? 'bg-mint text-forest border border-forest/20'
+                            : 'bg-gray-50 text-gray-400 border border-gray-200'
+                        }`}
+                      >
+                        ✓ All parts included
+                      </button>
+                    </div>
+                    <button
+                      className="text-xs text-gray-400 mt-2 underline"
+                    >
+                      Something not right? Report an issue →
+                    </button>
+                  </div>
+                )}
+
+                {/* Step 4 - Photo upload */}
+                {i === 3 && (step === 3 || step === 4) && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-400 mb-2">
+                      Add a photo · Optional<br />
+                      Help the next borrower see it&apos;s ready.
+                    </p>
+
+                    {returnPhotoPreview ? (
+                      <div className="relative w-full h-40 rounded-xl overflow-hidden mb-2">
+                        <img
+                          src={returnPhotoPreview}
+                          alt="Return photo"
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          onClick={() => {
+                            setReturnPhoto(null);
+                            setReturnPhotoPreview(null);
+                          }}
+                          className="absolute top-2 right-2 bg-black/50 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full py-3 border-2 border-dashed border-forest/30 rounded-xl text-forest text-sm font-medium flex items-center justify-center gap-2 hover:bg-mint/30 transition-colors"
+                      >
+                        <Camera size={18} />
+                        Take or upload a photo
+                      </button>
+                    )}
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handlePhotoChange}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+
+                {/* Step 5 - Complete */}
+                {i === 4 && returnComplete && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500">
+                      {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })},{' '}
+                      {new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} · Locker closed · Loan complete.
+                    </p>
+                    <p className="text-xs text-forest font-medium mt-1">
+                      Your {(loan as Loan & { _count?: number })?.id ? 'borrow' : '12th borrow'}. One more item kept in use.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* CTA Buttons */}
+        {step === 1 && mode === 'return' && (
+          <button
+            onClick={handleScanReturn}
+            className="btn-primary flex items-center justify-center gap-2 mb-4"
+          >
+            Scan your return QR →
+          </button>
+        )}
+
+        {step === 3 && mode === 'return' && (
+          <button
+            onClick={() => setStep(4)}
+            className="btn-primary flex items-center justify-center gap-2 mb-4"
+          >
+            Continue to photo →
+          </button>
+        )}
+
+        {(step === 4 || (step === 3 && returnPhoto)) && mode === 'return' && returnPhoto && (
+          <button
+            onClick={handleVerifyReturn}
+            disabled={verifying}
+            className="btn-primary flex items-center justify-center gap-2 mb-4"
+          >
+            {verifying ? (
+              <>
+                <Loader2 className="animate-spin" size={18} />
+                Verifying with AI...
+              </>
+            ) : (
+              <>Complete return →</>
+            )}
+          </button>
+        )}
+
+        {returnComplete && (
+          <button
+            onClick={() => router.push('/impact')}
+            className="btn-primary flex items-center justify-center gap-2 mb-4 bg-forest"
+          >
+            🌱 See my impact →
+          </button>
+        )}
+
+        {returnComplete && (
+          <p className="text-xs text-gray-400 text-center mb-4">
+            Journey states shown together for this concept.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function ScanPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="page-content flex items-center justify-center">
+          <Loader2 className="animate-spin text-forest" size={32} />
+        </div>
+      }
+    >
+      <ScanContent />
+    </Suspense>
+  );
+}
