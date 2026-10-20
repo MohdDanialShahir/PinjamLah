@@ -1,4 +1,4 @@
-# Product Requirements Document (PRD): Sharing Shed (Production Full-Stack PWA)
+# Product Requirements Document (PRD): Pinjam Lah! (Production Full-Stack PWA)
 **Competition:** Sime Darby Property University Hackathon 2026 ("Township of Tomorrow")[cite: 3]
 **Primary Track:** PLANET (Circular Economy) + Secondary: PEOPLE (Neighbourhood Connection)[cite: 3, 4, 5]
 **Application Type:** Full-Stack Installable Mobile Progressive Web App (PWA) with Live Supabase Backend, Real Camera QR Scanning, and Gemini Vision AI
@@ -6,7 +6,7 @@
 ---
 
 ## 1. Product Overview & Architecture Mandate
-**Sharing Shed** is a township-owned, automated "Library of Things" smart locker platform for Sime Darby Property townships (starting with Taman Kita, Selangor). Verified residents borrow township-owned tools and equipment for free via smart lockers in neighbourhood parks (`Central Park shed`, `Garden Walk`), matched with neighbour skill-sharing and automated **AI Computer Vision return verification**.
+**Pinjam Lah!** is a township-owned, automated "Library of Things" smart locker platform for Sime Darby Property townships (starting with Taman Kita, Selangor). Verified residents borrow township-owned tools and equipment for free via smart lockers in neighbourhood parks (`Central Park shed`, `Garden Walk`), matched with neighbour skill-sharing and automated **AI Computer Vision return verification**.
 
 > **STRICT ARCHITECTURAL RULE FOR AI AGENT:** 
 > This is a **100% working full-stack production application**, NOT a static mockup or hardcoded demo. Do NOT use hardcoded mock arrays or LocalStorage for state. Every screen must perform real `SELECT`, `INSERT`, and `UPDATE` queries against **Supabase PostgreSQL**, upload return photos to **Supabase Storage**, sync locker hardware states via **Supabase Realtime**, and inspect tool returns via the **Google Gemini API**.

@@ -114,7 +114,7 @@ export default function KioskPage() {
       {/* Header */}
       <div className="px-8 pt-8 pb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Sharing Shed</h1>
+          <h1 className="text-3xl font-bold">Pinjam Lah!</h1>
           <p className="text-white/60 text-sm mt-1">Central Park Kiosk · Smart Locker System</p>
         </div>
         <div className="flex items-center gap-3">
@@ -201,7 +201,7 @@ export default function KioskPage() {
       {/* Footer */}
       <div className="px-8 py-4 text-center">
         <p className="text-xs text-white/30">
-          Sharing Shed IoT Kiosk v1.0 · Supabase Realtime Connected
+          Pinjam Lah! IoT Kiosk v1.0 · Supabase Realtime Connected
         </p>
       </div>
     </div>

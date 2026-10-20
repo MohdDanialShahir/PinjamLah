@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
         const genAI = new GoogleGenerativeAI(geminiApiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
 
-        const prompt = `You are an AI inspection system for a community tool-lending library called "Sharing Shed".
+        const prompt = `You are an AI inspection system for a community tool-lending library called "Pinjam Lah!".
 
 A resident is returning a borrowed item: "${itemName}" (ID: ${itemId}).
 

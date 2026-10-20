@@ -245,7 +245,7 @@ function ScanContent() {
     const borrowSteps = [
       { label: 'Reserve your item', done: step > 1 },
       { label: 'Your pickup QR is ready', done: step > 2, active: step === 2 },
-      { label: 'Scan at the sharing shed', done: step > 3, active: step === 3 },
+      { label: 'Scan at Pinjam Lah! shed', done: step > 3, active: step === 3 },
       { label: 'Your smart locker opens', done: step > 4, active: step === 4 },
       { label: 'Borrow confirmed', done: step >= 5, active: step === 5 },
     ];
@@ -411,7 +411,7 @@ function ScanContent() {
               {scanning ? (
                 <Loader2 className="animate-spin" size={18} />
               ) : (
-                <>Scan at the sharing shed →</>
+                <>Scan at Pinjam Lah! shed →</>
               )}
             </button>
           )}

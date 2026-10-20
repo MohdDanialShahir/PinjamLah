@@ -185,7 +185,7 @@ function ExploreContent() {
           <div className="flex items-center gap-2">
             <MapPin size={16} className="text-forest" />
             <p className="text-xs text-forest font-medium">
-              2 sharing sheds near your home: Central Park · Garden Walk
+              2 Pinjam Lah! sheds near your home: Central Park · Garden Walk
             </p>
           </div>
         </div>

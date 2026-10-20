@@ -1,5 +1,5 @@
 -- =====================================================================
--- SHARING SHED - SUPABASE PRODUCTION DATABASE SCHEMA & INITIAL SEED
+-- PINJAM LAH! - SUPABASE PRODUCTION DATABASE SCHEMA & INITIAL SEED
 -- Township of Tomorrow | Sime Darby Property Hackathon 2026
 -- =====================================================================
 

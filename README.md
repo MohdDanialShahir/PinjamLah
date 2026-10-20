@@ -1,10 +1,10 @@
-# Sharing Shed (Library of Things) · Full-Stack Next.js PWA
+# Pinjam Lah! (Library of Things) · Full-Stack Next.js PWA
 
 > **Township of Tomorrow | Sime Darby Property University Hackathon 2026**  
 > **Primary Track:** PLANET (Circular Economy) · **Secondary Track:** PEOPLE (Neighbourhood Connection)  
 > **Location:** Taman Kita, Selangor (Central Park shed & Garden Walk shed)
 
-Sharing Shed is a township-owned, automated "Library of Things" smart locker platform. Verified residents borrow tools and equipment for free via IoT smart lockers in neighbourhood parks, matched with neighbour skill-sharing and automated **Google Gemini AI Computer Vision return verification**.
+Pinjam Lah! is a township-owned, automated "Library of Things" smart locker platform. Verified residents borrow tools and equipment for free via IoT smart lockers in neighbourhood parks, matched with neighbour skill-sharing and automated **Google Gemini AI Computer Vision return verification**.
 
 ---
 
@@ -43,7 +43,7 @@ Sharing Shed is a township-owned, automated "Library of Things" smart locker pla
 10. **Screen 10 · Resident Profile (`/profile`):**  
     Verified resident pass (TK-029), achievement badges, CO₂ milestone bar, and live borrow history joined from Supabase `loans` + `items`.
 11. **Hardware Companion Route (`/kiosk`):**  
-    Simulates the physical IoT touch terminal at Central Park Sharing Shed. Listens to Supabase Realtime changes and unlocks locker doors live when QR codes are processed.
+    Simulates the physical IoT touch terminal at Central Park Pinjam Lah! Shed. Listens to Supabase Realtime changes and unlocks locker doors live when QR codes are processed.
 
 ---
 
